@@ -41,19 +41,12 @@ public:
     }
 };
 
-double getMean(QVector<float>* data, unsigned size) {
-    double sum = 0.0;
-    for(double a : *data)
-        sum += a;
-    return sum/size;
+double getMean(QVector<float>* data) {
+    return 0;
 }
 
-double median(QVector<float>* data, unsigned size) {
-   //Arrays.sort(data);
-    std::sort((*data).begin(),(*data).end());
-   if ((*data).length() % 2 == 0)
-      return ((*data)[((*data).length() / 2) - 1] + (*data)[(*data).length() / 2]) / 2.0;
-   return (*data)[(*data).length() / 2];
+double median(QVector<float>* data) {
+    return 1;
 }
 
 const unsigned TotalData = 60*60*24*365;        // sec * min * hour * days
@@ -62,19 +55,21 @@ QWaitCondition bufferNotEmpty;
 QWaitCondition bufferNotFull;
 QMutex mutex;
 QVector<float> Buffer;
+unsigned Index = 0;
 
 void Producer() {
     for (unsigned int i = 0; i < TotalData; i++) {
         mutex.lock();
-        if (Buffer.size() == TotalBufferSize) {
+        if (Index >= TotalBufferSize) {
             bufferNotFull.wait(&mutex);
         }
         mutex.unlock();
 
-        Buffer.push_back(random() % 50 + 50);
+        Buffer[Index] = random() % 50 + 50;
 
         mutex.lock();
-        if (Buffer.size() == 24*3600)
+        Index++;
+        if (Index >= (24*3600))
             bufferNotEmpty.wakeAll();
         mutex.unlock();
     }
@@ -82,26 +77,21 @@ void Producer() {
 
 
 void Consumer() {
-    for (unsigned int i =0; i < TotalData; i++) {
+    for (unsigned int i = 0; i < TotalData; i++) {
+        if (i % (24*3600) == 0) {
+            mutex.lock();
+               bufferNotEmpty.wait(&mutex);
+            mutex.unlock();
 
-        mutex.lock();
-        if (Buffer.size() < 24*3600) {
-            bufferNotEmpty.wait(&mutex);
-        }
-        mutex.unlock();
-
-        if (i % 24*3600 == 0) {
-            s.getMean();
-            s.median();
+            getMean(&Buffer);
+            median(&Buffer);
             std::cout << i << " of " << TotalData << " ";
-            std::cout << "average temperature " << s.getMean() << " ";
-            std::cout << " with median " << s.median() << " ";
-            std::cout << "Current C buffer size: " << Buffer.size() << "\n";
+            std::cout << "average temperature " << getMean(&Buffer) << " ";
+            std::cout << " with median " << median(&Buffer) << " ";
+            std::cout << "Current index: " << Index << "\n";
+            Index = Index - 24*3600;
 
             mutex.lock();
-            Buffer.erase(Buffer.constBegin(), Buffer.constEnd()); // borra todo el buffer
-            //for(unsigned int i = 0; i < 24*3600; i++)
-            //    Buffer.pop_front();
             bufferNotFull.wakeAll();
             mutex.unlock();
         }
@@ -130,6 +120,7 @@ int main(int argc, char *argv[]) {
     std::cout << duration1.count() << "\n";
     std::cout << "Done in serial mode\n";
 */
+    Buffer.resize(TotalBufferSize);
 
     auto start = std::chrono::high_resolution_clock::now();
     std::thread p(Producer),c(Consumer);
