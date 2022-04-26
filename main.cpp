@@ -62,24 +62,21 @@ void Writer() {
 void Reader(unsigned int start_pos) {
     unsigned int counter = start_pos;
     while (counter < TotalData) {
-        if (counter % SampleSize == 0) {
-            lock.lockForRead();
-            if (Comparator < SampleSize)
-               bufferNotEmpty.wait(&lock);
-            lock.unlock();
+        lock.lockForRead();
+        if (Comparator < SampleSize)
+           bufferNotEmpty.wait(&lock);
+        lock.unlock();
 
-            std::cout << counter << " of " << TotalData << " ";
-            std::cout << "average temperature " << getMean(&Buffer, counter % TotalBufferSize) << " ";
-            std::cout << " with median " << median(&Buffer, counter % TotalBufferSize) << " ";
-            std::cout << "Current writer index: " << Comparator << "\n";
-            std::cout.flush();
-
-            lock.lockForRead();
-            Comparator = Comparator - SampleSize;
-            bufferNotFull.wakeAll();
-            lock.unlock();
-        }
+        std::cout << counter << " of " << TotalData << " ";
+        std::cout << "average temperature " << getMean(&Buffer, counter % TotalBufferSize) << " ";
+        std::cout << " with median " << median(&Buffer, counter % TotalBufferSize) << " ";
+        std::cout << "Current writer index: " << Comparator << "\n";
         counter += SampleSize*2;
+
+        lock.lockForRead();
+        Comparator = Comparator - SampleSize;
+        bufferNotFull.wakeAll();
+        lock.unlock();
     }
 }
 
@@ -95,7 +92,6 @@ int main(int argc, char *argv[]) {
     r2.join();
     auto stop3 = std::chrono::high_resolution_clock::now();
     auto duration3 = std::chrono::duration_cast<std::chrono::microseconds>(stop3 - start3);
-    float readers_writer_time = duration3.count();
     std::cout << duration3.count() << "\n";
     std::cout << "Done in readers writer mode\n";
 
