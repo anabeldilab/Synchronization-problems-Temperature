@@ -10,6 +10,7 @@
 #include <thread>
 #include <unistd.h>
 
+
 const unsigned TotalData = 60*60*24*365;        // sec * min * hour * days
 const unsigned TotalBufferSize = 60*60*24*30;
 const unsigned SampleSize = 60*60*24;
@@ -27,6 +28,7 @@ double getMean(QVector<float>* data, unsigned start_pos) {
     return sum/SampleSize;
 }
 
+
 double median(QVector<float>* data, unsigned start_pos) {
    std::sort((*data).begin() + start_pos, (*data).begin() + start_pos + SampleSize - 1);
    if ((start_pos + SampleSize - 1) % 2 == 0)
@@ -34,25 +36,65 @@ double median(QVector<float>* data, unsigned start_pos) {
    return (*data)[(start_pos + SampleSize - 1) / 2];
 }
 
+
+void Producer() {
+    for (unsigned int i = 0; i < TotalData; i++) {
+        mutex.lock();
+        if (Comparator == TotalBufferSize) {
+            bufferNotFull.wait(&mutex);
+        }
+        mutex.unlock();
+
+        Buffer[i % TotalBufferSize] = random() % 50 + 50;
+        Comparator++;
+
+        mutex.lock();
+        if (Comparator >= SampleSize*2)
+            bufferNotEmpty.wakeAll();
+        mutex.unlock();
+    }
+}
+
+
+void Consumer(unsigned int start_pos) {
+    unsigned int counter = start_pos;
+    while (counter < TotalData) {
+        if (counter % SampleSize == 0) {
+            mutex.lock();
+            if (Comparator < SampleSize)
+               bufferNotEmpty.wait(&mutex);
+            mutex.unlock();
+
+            std::cout << counter << " of " << TotalData << " ";
+            std::cout << "average temperature " << getMean(&Buffer, counter % TotalBufferSize) << " ";
+            std::cout << " with median " << median(&Buffer, counter % TotalBufferSize) << " ";
+            std::cout << "Current producer index: " << Comparator << "\n";
+            std::cout.flush();
+
+            mutex.lock();
+            Comparator = Comparator - SampleSize;
+            bufferNotFull.wakeAll();
+            mutex.unlock();
+        }
+        counter += SampleSize*2;
+    }
+}
+
+
 int main(int argc, char *argv[]) {
     QCoreApplication a(argc, argv);
     Buffer.resize(TotalBufferSize);
 
-    auto start1 = std::chrono::high_resolution_clock::now();
-    for(unsigned int i = 0; i < TotalData; i++) {
-        Buffer[i % TotalBufferSize] = random() % 50 + 50;
-        if(i % (24*3600) == 0) {
-            std::cout << i << " of " << TotalData << " ";
-            std::cout << "average temperature " << getMean(&Buffer, i % TotalBufferSize) << " ";
-            std::cout << " with median " << median(&Buffer, i % TotalBufferSize) << "\n";
-        }
-    }
-    auto stop1 = std::chrono::high_resolution_clock::now();
-    auto duration1 = std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start1);
-    float serial_time = duration1.count();
-    std::cout << duration1.count() << "\n";
-    std::cout << "Done in serial mode\n";
-
+    auto start2 = std::chrono::high_resolution_clock::now();
+    std::thread p(Producer),c1(Consumer, 0), c2(Consumer, SampleSize);
+    p.join();
+    c1.join();
+    c2.join();
+    auto stop2 = std::chrono::high_resolution_clock::now();
+    auto duration2 = std::chrono::duration_cast<std::chrono::microseconds>(stop2 - start2);
+    float producer_consumer_time = duration2.count();
+    std::cout << duration2.count() << "\n";
+    std::cout << "Done in producer/consumer mode\n";
 
     return 0;
 }
