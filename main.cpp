@@ -37,44 +37,47 @@ double median(QVector<float>* data, unsigned start_pos) {
 }
 
 
-void Producer() {
+QReadWriteLock lock;
+
+
+void Writer() {
     for (unsigned int i = 0; i < TotalData; i++) {
-        mutex.lock();
+        lock.lockForWrite();
         if (Comparator == TotalBufferSize) {
-            bufferNotFull.wait(&mutex);
+            bufferNotFull.wait(&lock);
         }
-        mutex.unlock();
+        lock.unlock();
 
         Buffer[i % TotalBufferSize] = random() % 50 + 50;
         Comparator++;
 
-        mutex.lock();
+        lock.lockForWrite();
         if (Comparator >= SampleSize*2)
             bufferNotEmpty.wakeAll();
-        mutex.unlock();
+        lock.unlock();
     }
 }
 
 
-void Consumer(unsigned int start_pos) {
+void Reader(unsigned int start_pos) {
     unsigned int counter = start_pos;
     while (counter < TotalData) {
         if (counter % SampleSize == 0) {
-            mutex.lock();
+            lock.lockForRead();
             if (Comparator < SampleSize)
-               bufferNotEmpty.wait(&mutex);
-            mutex.unlock();
+               bufferNotEmpty.wait(&lock);
+            lock.unlock();
 
             std::cout << counter << " of " << TotalData << " ";
             std::cout << "average temperature " << getMean(&Buffer, counter % TotalBufferSize) << " ";
             std::cout << " with median " << median(&Buffer, counter % TotalBufferSize) << " ";
-            std::cout << "Current producer index: " << Comparator << "\n";
+            std::cout << "Current writer index: " << Comparator << "\n";
             std::cout.flush();
 
-            mutex.lock();
+            lock.lockForRead();
             Comparator = Comparator - SampleSize;
             bufferNotFull.wakeAll();
-            mutex.unlock();
+            lock.unlock();
         }
         counter += SampleSize*2;
     }
@@ -85,16 +88,16 @@ int main(int argc, char *argv[]) {
     QCoreApplication a(argc, argv);
     Buffer.resize(TotalBufferSize);
 
-    auto start2 = std::chrono::high_resolution_clock::now();
-    std::thread p(Producer),c1(Consumer, 0), c2(Consumer, SampleSize);
-    p.join();
-    c1.join();
-    c2.join();
-    auto stop2 = std::chrono::high_resolution_clock::now();
-    auto duration2 = std::chrono::duration_cast<std::chrono::microseconds>(stop2 - start2);
-    float producer_consumer_time = duration2.count();
-    std::cout << duration2.count() << "\n";
-    std::cout << "Done in producer/consumer mode\n";
+    auto start3 = std::chrono::high_resolution_clock::now();
+    std::thread w(Writer), r1(Reader, 0), r2(Reader, SampleSize);
+    w.join();
+    r1.join();
+    r2.join();
+    auto stop3 = std::chrono::high_resolution_clock::now();
+    auto duration3 = std::chrono::duration_cast<std::chrono::microseconds>(stop3 - start3);
+    float readers_writer_time = duration3.count();
+    std::cout << duration3.count() << "\n";
+    std::cout << "Done in readers writer mode\n";
 
     return 0;
 }
