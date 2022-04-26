@@ -59,23 +59,21 @@ void Producer() {
 void Consumer(unsigned int start_pos) {
     unsigned int counter = start_pos;
     while (counter < TotalData) {
-        if (counter % SampleSize == 0) {
-            mutex.lock();
-            if (Comparator < SampleSize)
-               bufferNotEmpty.wait(&mutex);
-            mutex.unlock();
+        mutex.lock();
+        if (Comparator < SampleSize)
+           bufferNotEmpty.wait(&mutex);
+        mutex.unlock();
 
-            std::cout << counter << " of " << TotalData << " ";
-            std::cout << "average temperature " << getMean(&Buffer, counter % TotalBufferSize) << " ";
-            std::cout << " with median " << median(&Buffer, counter % TotalBufferSize) << " ";
-            std::cout << "Current producer index: " << Comparator << "\n";
-            std::cout.flush();
+        std::cout << counter << " of " << TotalData << " ";
+        std::cout << "average temperature " << getMean(&Buffer, counter % TotalBufferSize) << " ";
+        std::cout << " with median " << median(&Buffer, counter % TotalBufferSize) << " ";
+        std::cout << "Current producer index: " << Comparator << "\n";
 
-            mutex.lock();
-            Comparator = Comparator - SampleSize;
-            bufferNotFull.wakeAll();
-            mutex.unlock();
-        }
+        mutex.lock();
+        Comparator = Comparator - SampleSize;
+        bufferNotFull.wakeAll();
+        mutex.unlock();
+
         counter += SampleSize*2;
     }
 }
@@ -92,7 +90,6 @@ int main(int argc, char *argv[]) {
     c2.join();
     auto stop2 = std::chrono::high_resolution_clock::now();
     auto duration2 = std::chrono::duration_cast<std::chrono::microseconds>(stop2 - start2);
-    float producer_consumer_time = duration2.count();
     std::cout << duration2.count() << "\n";
     std::cout << "Done in producer/consumer mode\n";
 
